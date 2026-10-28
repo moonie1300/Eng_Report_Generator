@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Battery Test Report Generator</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f1f4f8; color: #213d60; margin: 0; }
+  main { max-width: 640px; margin: 40px auto; background: #fff; padding: 28px; border-radius: 8px; box-shadow: 0 1px 4px #0002; }
+  h1 { margin-top: 0; font-size: 1.5rem; }
+  label { display: block; margin: 14px 0 4px; font-weight: 600; }
+  input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #b8c2d0; border-radius: 4px; }
+  .row { display: flex; gap: 12px; } .row > div { flex: 1; }
+  button { margin-top: 20px; padding: 10px 18px; background: #213d60; color: #fff; border: 0; border-radius: 4px; font-size: 1rem; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: wait; }
+  small { color: #5b6b80; }
+  #error { color: #b00020; margin-top: 16px; white-space: pre-wrap; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: .9rem; }
+  td, th { padding: 6px 8px; text-align: left; } tr:nth-child(even) { background: #f1f4f8; }
+  th { background: #213d60; color: #fff; }
+  .PASS { color: #1b7f3b; font-weight: 700; } .FAIL { color: #b00020; font-weight: 700; }
+  #download { display: inline-block; margin-top: 16px; color: #18799c; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Battery Test Report Generator</h1>
+  <form id="form">
+    <label for="file">Measurement CSV</label>
+    <input id="file" type="file" accept=".csv,text/csv" required>
+    <small>Columns: timestamp, voltage_v, current_a, soc_pct</small>
+    <div class="row">
+      <div><label for="max_voltage">Max voltage (V)</label>
+        <input id="max_voltage" type="number" step="any" min="0" placeholder="optional"></div>
+      <div><label for="max_abs_current">Max absolute current (A)</label>
+        <input id="max_abs_current" type="number" step="any" min="0" placeholder="optional"></div>
+    </div>
+    <small>Leave limits blank for no pass/fail assessment.</small><br>
+    <button id="submit" type="submit">Generate report</button>
+  </form>
+  <div id="error" role="alert"></div>
+  <div id="result" hidden>
+    <table id="metrics"></table>
+    <a id="download">Download PDF</a>
+  </div>
+</main>
+<script>
+const form = document.getElementById('form');
+const errorBox = document.getElementById('error');
+const result = document.getElementById('result');
+const button = document.getElementById('submit');
+let pdfUrl = null;
+
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  errorBox.textContent = '';
+  result.hidden = true;
+  button.disabled = true;
+  try {
+    const file = document.getElementById('file').files[0];
+    const response = await fetch('/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        csv: await file.text(),
+        filename: file.name,
+        max_voltage: document.getElementById('max_voltage').value,
+        max_abs_current: document.getElementById('max_abs_current').value,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    show(data, file.name);
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+function show(data, filename) {
+  const table = document.getElementById('metrics');
+  table.replaceChildren();
+  const head = table.insertRow();
+  for (const text of ['Metric', 'Result']) {
+    const cell = document.createElement('th');
+    cell.textContent = text;
+    head.appendChild(cell);
+  }
+  for (const [key, value] of Object.entries(data.metrics)) {
+    const row = table.insertRow();
+    row.insertCell().textContent = key;
+    const cell = row.insertCell();
+    cell.textContent = value;
+    if (key === 'Test assessment') cell.className = value.replace(/ /g, '_');
+  }
+  const bytes = Uint8Array.from(atob(data.pdf), (c) => c.charCodeAt(0));
+  if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+  pdfUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  const link = document.getElementById('download');
+  link.href = pdfUrl;
+  link.download = filename.replace(/\.csv$/i, '') + '_report.pdf';
+  result.hidden = false;
+}
+</script>
+</body>
+</html>
