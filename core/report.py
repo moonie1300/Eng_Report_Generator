@@ -1,7 +1,7 @@
 """Shared report-building workflow used by the CLI and the web interface."""
-from calculations import assess_measurements, compute_metrics
-from measurements import read_measurements
-from pdf_report import make_pdf
+from .calculations import assess_measurements, compute_metrics
+from .measurements import read_measurements
+from .pdf_report import make_pdf
 
 
 def build_report(csv_path, output, input_name, max_voltage=None, max_abs_current=None):

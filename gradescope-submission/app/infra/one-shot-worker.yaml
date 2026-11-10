@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Assignment 3 on-demand report worker using existing CAB432 resources.
+Parameters:
+  UploadBucketName:
+    Type: String
+    Default: cab432-n11180021-reports
+  JobTableName:
+    Type: String
+    Default: n11180021-a3-report-jobs
+    AllowedPattern: '[a-zA-Z0-9_.-]{3,255}'
+  JobQueueUrl:
+    Type: String
+    Default: https://sqs.ap-southeast-2.amazonaws.com/901444280953/n11180021-a3-report-jobs
+  WorkerImage:
+    Type: String
+    Default: 901444280953.dkr.ecr.ap-southeast-2.amazonaws.com/n11180021-a3-report-worker:v1
+  ExecutionRoleArn:
+    Type: String
+    Default: arn:aws:iam::901444280953:role/Execution-Role-CAB432-ECS
+  TaskRoleArn:
+    Type: String
+    Default: arn:aws:iam::901444280953:role/Task-Role-CAB432-ECS
+Resources:
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: n11180021-a3-report-cluster
+      Tags:
+        - {Key: purpose, Value: assessment 3}
+        - {Key: qut-username, Value: n11180021@qut.edu.au}
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: n11180021-a3-report-worker
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ExecutionRoleArn: !Ref ExecutionRoleArn
+      TaskRoleArn: !Ref TaskRoleArn
+      ContainerDefinitions:
+        - Name: report-worker
+          Image: !Ref WorkerImage
+          Essential: true
+          Command: [python, -m, worker.main, --once]
+          Environment:
+            - {Name: BUCKET_NAME, Value: !Ref UploadBucketName}
+            - {Name: TABLE_NAME, Value: !Ref JobTableName}
+            - {Name: QUEUE_URL, Value: !Ref JobQueueUrl}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/n11180021-a3-report-worker
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: worker
+      Tags:
+        - {Key: purpose, Value: assessment 3}
+        - {Key: qut-username, Value: n11180021@qut.edu.au}
+Outputs:
+  TableName:
+    Value: !Ref JobTableName
+  QueueUrl:
+    Value: !Ref JobQueueUrl
+  WorkerImage:
+    Value: !Ref WorkerImage
+  ClusterName:
+    Value: !Ref Cluster
+  TaskDefinitionArn:
+    Value: !Ref TaskDefinition
+  LogGroup:
+    Value: /ecs/n11180021-a3-report-worker

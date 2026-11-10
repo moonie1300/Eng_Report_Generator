@@ -20,11 +20,32 @@
   th { background: #213d60; color: #fff; }
   .PASS { color: #1b7f3b; font-weight: 700; } .FAIL { color: #b00020; font-weight: 700; }
   #download { display: inline-block; margin-top: 16px; color: #18799c; font-weight: 600; }
+  section + section { border-top: 1px solid #d5dce5; margin-top: 32px; padding-top: 12px; }
+  #cloud-error { color: #b00020; margin-top: 12px; white-space: pre-wrap; }
+  #cloud-status { margin-top: 12px; overflow-wrap: anywhere; }
+  #cloud-upload { margin-top: 0; }
 </style>
 </head>
 <body>
 <main>
   <h1>Battery Test Report Generator</h1>
+  <p id="local-cloud-link" hidden><a href="/cloud">Open local AWS job interface</a></p>
+  <section>
+  <h2>Upload to AWS</h2>
+  <p>Sign in, then upload a CSV. Report processing is not yet available through this upload.</p>
+  <button id="sign-in" type="button">Sign in</button>
+  <button id="sign-out" type="button" hidden>Clear sign-in</button>
+  <form id="cloud-upload" hidden>
+    <label for="cloud-file">Measurement CSV</label>
+    <input id="cloud-file" type="file" accept=".csv,text/csv" required>
+    <button id="upload-button" type="submit">Upload CSV</button>
+  </form>
+  <div id="cloud-status" role="status" aria-live="polite"></div>
+  <div id="cloud-error" role="alert"></div>
+  </section>
+  <section>
+  <h2>Local PDF report</h2>
+  <p>This option requires the local report server.</p>
   <form id="form">
     <label for="file">Measurement CSV</label>
     <input id="file" type="file" accept=".csv,text/csv" required>
@@ -43,7 +64,20 @@
     <table id="metrics"></table>
     <a id="download">Download PDF</a>
   </div>
+  </section>
 </main>
+<script>
+const AWS_CONFIG = {
+  cognitoDomain: 'https://ap-southeast-2m74q2kicp.auth.ap-southeast-2.amazoncognito.com',
+  clientId: '4c7t2jg54l50p96us4sp4c23t6',
+  redirectUri: 'https://d84l1y8p4kdic.cloudfront.net',
+  uploadApiUrl: 'https://60cz77rxmk.execute-api.ap-southeast-2.amazonaws.com/a3/upload-url',
+};
+if (location.hostname === '127.0.0.1') {
+  document.getElementById('local-cloud-link').hidden = false;
+}
+</script>
+<script src="/static/cloud-upload.js" defer></script>
 <script>
 const form = document.getElementById('form');
 const errorBox = document.getElementById('error');

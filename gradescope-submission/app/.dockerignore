@@ -1,0 +1,11 @@
+.git
+.venv*
+**/__pycache__
+cdk.out
+infra
+api
+tests
+static
+frontend
+Sample_Data
+*.pdf

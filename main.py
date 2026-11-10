@@ -1,7 +1,7 @@
 """Generate an engineering battery test PDF from timestamped CSV measurements."""
 import argparse
 from pathlib import Path
-from report import build_report
+from core.report import build_report
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)

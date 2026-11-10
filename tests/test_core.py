@@ -4,8 +4,8 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from calculations import assess_measurements, compute_metrics
-from measurements import read_measurements
+from core.calculations import assess_measurements, compute_metrics
+from core.measurements import read_measurements
 
 
 class ReadMeasurementsTests(unittest.TestCase):

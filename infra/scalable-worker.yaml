@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Prepared ECS worker service and SQS step scaling; alarm actions disabled by default.
+Parameters:
+  WorkerImage:
+    Type: String
+    Description: Digest-pinned lease-aware worker image from the existing repository.
+    Default: 901444280953.dkr.ecr.ap-southeast-2.amazonaws.com/n11180021-a3-report-worker@sha256:699c1379506e10dab97c7f664e345088a15d08e4614bf6f56484f6718f8c4a13
+    AllowedPattern: '901444280953\.dkr\.ecr\.ap-southeast-2\.amazonaws\.com/n11180021-a3-report-worker@sha256:[0-9a-f]{64}'
+  MaximumWorkers:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    MaxValue: 3
+    AllowedValues: [1, 2, 3]
+  EnableScalingActions:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+Conditions:
+  ScalingEnabled: !Equals [!Ref EnableScalingActions, 'true']
+Resources:
+  WorkerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: n11180021-a3-report-service-worker
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      RuntimePlatform: {CpuArchitecture: X86_64, OperatingSystemFamily: LINUX}
+      ExecutionRoleArn: arn:aws:iam::901444280953:role/Execution-Role-CAB432-ECS
+      TaskRoleArn: arn:aws:iam::901444280953:role/Task-Role-CAB432-ECS
+      ContainerDefinitions:
+        - Name: report-worker
+          Image: !Ref WorkerImage
+          Essential: true
+          Command: [python, -m, worker.main]
+          Environment:
+            - {Name: BUCKET_NAME, Value: cab432-n11180021-reports}
+            - {Name: TABLE_NAME, Value: n11180021-a3-report-jobs}
+            - {Name: QUEUE_URL, Value: 'https://sqs.ap-southeast-2.amazonaws.com/901444280953/n11180021-a3-report-jobs'}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/n11180021-a3-report-worker
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: service
+      Tags:
+        - {Key: purpose, Value: assessment 3}
+        - {Key: qut-username, Value: n11180021@qut.edu.au}
+  WorkerService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: n11180021-a3-report-workers
+      Cluster: n11180021-a3-report-cluster
+      TaskDefinition: !Ref WorkerTaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 0
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: [subnet-04cc288ea3b2e1e53]
+          SecurityGroups: [sg-078997505ad1c6bbc]
+      PropagateTags: SERVICE
+      Tags:
+        - {Key: purpose, Value: assessment 3}
+        - {Key: qut-username, Value: n11180021@qut.edu.au}
+  WorkerTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MinCapacity: 0
+      MaxCapacity: !Ref MaximumWorkers
+      ResourceId: !Sub service/n11180021-a3-report-cluster/${WorkerService.Name}
+      RoleARN: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+  ScaleOut:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: n11180021-a3-worker-scale-out
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref WorkerTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Maximum
+        StepAdjustments:
+          - {MetricIntervalLowerBound: 0, MetricIntervalUpperBound: 2, ScalingAdjustment: 1}
+          - {MetricIntervalLowerBound: 2, MetricIntervalUpperBound: 5, ScalingAdjustment: 2}
+          - {MetricIntervalLowerBound: 5, ScalingAdjustment: 3}
+  ScaleIn:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: n11180021-a3-worker-scale-in
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref WorkerTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 180
+        MetricAggregationType: Maximum
+        StepAdjustments:
+          - {MetricIntervalLowerBound: 0, ScalingAdjustment: -1}
+  QueueBacklog:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: n11180021-a3-worker-backlog
+      ActionsEnabled: !If [ScalingEnabled, true, false]
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - {Name: QueueName, Value: n11180021-a3-report-jobs}
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref ScaleOut]
+  QueueIdle:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: n11180021-a3-worker-idle
+      ActionsEnabled: !If [ScalingEnabled, true, false]
+      Metrics:
+        - Id: visible
+          MetricStat:
+            Metric:
+              Namespace: AWS/SQS
+              MetricName: ApproximateNumberOfMessagesVisible
+              Dimensions:
+                - {Name: QueueName, Value: n11180021-a3-report-jobs}
+            Period: 60
+            Stat: Maximum
+          ReturnData: false
+        - Id: inflight
+          MetricStat:
+            Metric:
+              Namespace: AWS/SQS
+              MetricName: ApproximateNumberOfMessagesNotVisible
+              Dimensions:
+                - {Name: QueueName, Value: n11180021-a3-report-jobs}
+            Period: 60
+            Stat: Maximum
+          ReturnData: false
+        - {Id: idle, Expression: 'FILL(IF(visible == 0, IF(inflight == 0, 1, 0), 0), 0)', ReturnData: true}
+      EvaluationPeriods: 5
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref ScaleIn]
+Outputs:
+  ServiceName:
+    Value: !GetAtt WorkerService.Name
+  MaximumWorkers:
+    Value: !Ref MaximumWorkers

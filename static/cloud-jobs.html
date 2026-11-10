@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Engineering Test Report Generator</title>
+<style>
+  :root { color-scheme: light; font-family: system-ui, sans-serif; color: #203b5a; background: #f1f4f8; }
+  body { margin: 0; }
+  main { max-width: 760px; margin: 36px auto; padding: 0 18px 36px; }
+  h1 { margin: 0 0 8px; font-size: 1.8rem; }
+  h2 { font-size: 1.15rem; margin: 0 0 8px; }
+  p, small { line-height: 1.5; }
+  .card { background: white; border: 1px solid #dce4ec; border-radius: 10px; padding: 22px; margin-top: 20px; }
+  label { display: block; font-weight: 600; margin: 16px 0 6px; }
+  input { box-sizing: border-box; width: 100%; padding: 10px; border: 1px solid #aebdcb; border-radius: 5px; font: inherit; }
+  .row { display: flex; gap: 16px; }
+  .row > div { flex: 1; min-width: 0; }
+  button, .download { display: inline-block; margin: 16px 8px 0 0; padding: 10px 16px; background: #213d60; color: white; border: 0; border-radius: 5px; cursor: pointer; font: inherit; text-decoration: none; }
+  button:disabled { opacity: .5; cursor: default; }
+  .secondary { color: #213d60; background: #e7eef5; }
+  .warning { background: #fff7e2; border-left: 4px solid #b67800; padding: 10px 14px; }
+  .steps { display: flex; list-style: none; padding: 0; gap: 8px; }
+  .steps li { flex: 1; background: #e7eef5; padding: 9px; border-radius: 5px; text-align: center; }
+  .steps li.current { background: #213d60; color: white; font-weight: 700; }
+  #error { color: #b00020; white-space: pre-wrap; }
+  #job-id, #task { overflow-wrap: anywhere; }
+  a { color: #18799c; }
+  .download { color: white; }
+  [hidden] { display: none !important; }
+  @media (max-width: 520px) { .row { flex-direction: column; gap: 0; } .steps { flex-direction: column; } main { margin-top: 20px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Engineering Test Report Generator</h1>
+  <p>Upload battery test measurements and generate a report using the existing AWS processing workflow.</p>
+  <section class="card" aria-labelledby="submit-heading">
+    <h2 id="submit-heading">1. Submit a report job</h2>
+    <form id="job-form">
+      <label for="job-file">Measurement CSV</label>
+      <input id="job-file" type="file" accept=".csv,text/csv" required>
+      <small>UTF-8 CSV columns: timestamp, voltage_v, current_a, soc_pct.</small>
+      <div class="row">
+        <div><label for="max-voltage">Maximum voltage (V), optional</label>
+          <input id="max-voltage" type="number" step="any" min="0" placeholder="e.g. 60"></div>
+        <div><label for="max-current">Maximum absolute current (A), optional</label>
+          <input id="max-current" type="number" step="any" min="0" placeholder="e.g. 40"></div>
+      </div>
+      <small>Limits must be greater than zero. No limits: NOT ASSESSED. One passing limit: PARTIALLY ASSESSED. An exceeded supplied limit: FAIL.</small><br>
+      <button id="submit-job" type="submit">Upload and submit job</button>
+    </form>
+  </section>
+  <section class="card" aria-labelledby="status-heading">
+    <h2 id="status-heading">2. Job status and report</h2>
+    <form id="lookup-form">
+      <label for="lookup-id">Open an existing job by ID</label>
+      <input id="lookup-id" type="text" autocomplete="off" placeholder="Job ID" required>
+      <button class="secondary" type="submit">Check job</button>
+    </form>
+    <div id="job" hidden>
+      <p>Job ID: <strong id="job-id"></strong></p>
+      <p role="status" aria-live="polite">Job status: <strong id="job-status"></strong></p>
+      <ol class="steps" aria-label="Job status">
+        <li id="step-queued">Queued</li>
+        <li id="step-processing">Processing</li>
+        <li id="step-completed">Completed</li>
+      </ol>
+      <p id="worker-warning" class="warning" hidden><strong>Billable task:</strong> Starting a Fargate worker incurs AWS charges. It processes the next message in the shared queue, which may be a different job.</p>
+      <button id="start-worker" type="button" hidden>Start one Fargate worker</button>
+      <button id="refresh" class="secondary" type="button">Refresh status</button>
+      <p id="task"></p>
+      <a id="report" class="download" hidden download>Download PDF</a>
+    </div>
+    <p id="error" role="alert"></p>
+  </section>
+  <section class="card" aria-labelledby="cache-heading">
+    <h2 id="cache-heading">3. Cache demonstration</h2>
+    <p>Only completed job status is cached in this local server. Refresh statistics after checking a job.</p>
+    <button id="cache-refresh" class="secondary" type="button">Show cache statistics</button>
+    <button id="cache-reset" class="secondary" type="button">Reset statistics and clear cache</button>
+    <p id="cache-stats" role="status" aria-live="polite">Statistics not yet loaded.</p>
+    <p id="cache-error" role="alert"></p>
+  </section>
+  <p>Runs locally using your AWS credentials; credentials stay on the server. <a href="/local">Local PDF development and Cognito upload</a></p>
+</main>
+<script src="/static/cloud-jobs.js" defer></script>
+<script src="/static/cache-stats.js" defer></script>
+</body>
+</html>

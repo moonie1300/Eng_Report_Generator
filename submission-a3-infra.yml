@@ -1,0 +1,59 @@
+cloudInfrastructure:
+  - type: S3 bucket
+    arn: arn:aws:s3:::cab432-n11180021-reports
+    description: Stores uploaded engineering CSV files and generated PDF reports.
+
+  - type: DynamoDB table
+    arn: arn:aws:dynamodb:ap-southeast-2:901444280953:table/n11180021-a3-report-jobs
+    description: Stores report job status, engineering limits, processing leases and results.
+
+  - type: SQS queue
+    arn: arn:aws:sqs:ap-southeast-2:901444280953:n11180021-a3-report-jobs
+    description: Queues engineering report jobs for asynchronous processing.
+
+  - type: SQS dead-letter queue
+    arn: arn:aws:sqs:ap-southeast-2:901444280953:n11180021-a3-report-jobs-dlq
+    description: Retains report jobs that exceed the configured retry threshold.
+
+  - type: ECS cluster
+    arn: arn:aws:ecs:ap-southeast-2:901444280953:cluster/n11180021-a3-report-cluster
+    description: Hosts the container-based report-processing workloads.
+
+  - type: ECS service
+    arn: arn:aws:ecs:ap-southeast-2:901444280953:service/n11180021-a3-report-cluster/n11180021-a3-report-workers
+    description: Runs SQS-polling Fargate workers for engineering report jobs.
+
+  - type: ECS task definition
+    arn: arn:aws:ecs:ap-southeast-2:901444280953:task-definition/n11180021-a3-report-service-worker:1
+    description: Configures the service's Fargate worker container and runtime settings.
+
+  - type: ECR repository
+    arn: arn:aws:ecr:ap-southeast-2:901444280953:repository/n11180021-a3-report-worker
+    description: Stores container images used by the report-processing workers.
+
+  - type: Application Auto Scaling scalable target
+    arn: arn:aws:application-autoscaling:ap-southeast-2:901444280953:scalable-target/0ec52ddfc7287deb410e8e8ff4d3ff337d4d
+    description: Registers the ECS service for scaling between zero and three workers.
+
+  - type: Application Auto Scaling policy
+    arn: arn:aws:autoscaling:ap-southeast-2:901444280953:scalingPolicy:2ddfc728-7deb-410e-8e8f-f4d3ff337d4d:resource/ecs/service/n11180021-a3-report-cluster/n11180021-a3-report-workers:policyName/n11180021-a3-worker-scale-out
+    description: Increases worker capacity when queued report jobs accumulate.
+
+  - type: Application Auto Scaling policy
+    arn: arn:aws:autoscaling:ap-southeast-2:901444280953:scalingPolicy:2ddfc728-7deb-410e-8e8f-f4d3ff337d4d:resource/ecs/service/n11180021-a3-report-cluster/n11180021-a3-report-workers:policyName/n11180021-a3-worker-scale-in
+    description: Decreases worker capacity when the job queue is idle.
+
+  - type: CloudWatch alarm
+    arn: arn:aws:cloudwatch:ap-southeast-2:901444280953:alarm:n11180021-a3-worker-backlog
+    description: Monitors queued SQS messages to trigger the scale-out policy.
+
+  - type: CloudWatch alarm
+    arn: arn:aws:cloudwatch:ap-southeast-2:901444280953:alarm:n11180021-a3-worker-idle
+    description: Monitors visible and in-flight SQS messages for safe scale-in.
+
+  - type: CloudWatch log group
+    arn: arn:aws:logs:ap-southeast-2:901444280953:log-group:/ecs/n11180021-a3-report-worker
+    description: Collects logs from the Fargate report-processing containers.
+
+metaData:
+  qutUsernameTag: n11180021@qut.edu.au

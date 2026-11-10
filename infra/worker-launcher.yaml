@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Disabled-by-default scheduled launcher for the existing one-shot Fargate worker.
+Parameters:
+  LauncherCodeBucket:
+    Type: String
+    Description: Existing S3 bucket containing the launcher ZIP.
+  LauncherCodeKey:
+    Type: String
+    Description: S3 key of the launcher ZIP containing launcher.py at its root.
+  LauncherRoleArn:
+    Type: String
+    Description: Existing Lambda execution role with the permissions documented in README.
+    Default: arn:aws:iam::901444280953:role/CAB432-Lambda-Role
+  ScheduleState:
+    Type: String
+    AllowedValues: [DISABLED, ENABLED]
+    Default: DISABLED
+  TaskDefinitionArn:
+    Type: String
+    Default: arn:aws:ecs:ap-southeast-2:901444280953:task-definition/n11180021-a3-report-worker:1
+Resources:
+  Launcher:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: n11180021-a3-report-launcher
+      Runtime: python3.12
+      Handler: launcher.handler
+      Role: !Ref LauncherRoleArn
+      Timeout: 30
+      ReservedConcurrentExecutions: 1
+      Code:
+        S3Bucket: !Ref LauncherCodeBucket
+        S3Key: !Ref LauncherCodeKey
+      Environment:
+        Variables:
+          TABLE_NAME: n11180021-a3-report-jobs
+          QUEUE_URL: https://sqs.ap-southeast-2.amazonaws.com/901444280953/n11180021-a3-report-jobs
+          CLUSTER: n11180021-a3-report-cluster
+          TASK_DEFINITION: !Ref TaskDefinitionArn
+          SUBNET_ID: subnet-04cc288ea3b2e1e53
+          SECURITY_GROUP_ID: sg-078997505ad1c6bbc
+      Tags:
+        - {Key: purpose, Value: assessment 3}
+        - {Key: qut-username, Value: n11180021@qut.edu.au}
+  ReconcileSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: n11180021-a3-report-reconcile
+      ScheduleExpression: rate(1 minute)
+      State: !Ref ScheduleState
+      Targets:
+        - Id: ReportLauncher
+          Arn: !GetAtt Launcher.Arn
+  SchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Launcher
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ReconcileSchedule.Arn
+Outputs:
+  LauncherFunctionName:
+    Value: !Ref Launcher
+  ScheduleName:
+    Value: !Ref ReconcileSchedule
